@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thai W Code AI</title>
+
+<!-- AI -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+
+<style>
+body { font-family:sans-serif; text-align:center; background:#111; color:#fff; }
+video, canvas { width:90%; max-width:320px; border:2px solid #fff; border-radius:12px;}
+button { margin:6px; padding:12px; border:none; border-radius:10px;}
+#start { background:#ff6d00; color:#fff;}
+#scan { background:#00c853; color:#fff;}
+#save { background:#2962ff; color:#fff;}
+#speak { background:#ffd600; color:#000;}
+#result { margin-top:10px;}
+</style>
+</head>
+
+<body>
+
+<h3>Thai W Code (AI All-in-One)</h3>
+
+<video id="video" autoplay playsinline></video><br>
+
+<button id="start">▶️ เปิดกล้อง</button><br>
+<button id="scan">📸 สแกน AI</button>
+<button id="save">💾 บันทึก</button>
+
+<canvas id="canvas" width="300" height="300" style="display:none;"></canvas>
+
+<div id="result">กำลังโหลด AI...</div>
+
+<script>
+let video = document.getElementById("video");
+let db = JSON.parse(localStorage.getItem("wcodeDB") || "[]");
+let model;
+
+// โหลด AI
+mobilenet.load().then(m=>{
+  model = m;
+  document.getElementById("result").innerText = "AI พร้อมแล้ว";
+});
+
+// เปิดกล้อง
+document.getElementById("start").onclick = async ()=>{
+  let stream = await navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:"environment" }
+  });
+  video.srcObject = stream;
+};
+
+// ===== AI Feature =====
+async function getFeature(img){
+  const tensor = tf.browser.fromPixels(img)
+    .resizeNearestNeighbor([224,224])
+    .toFloat()
+    .expandDims();
+
+  const embedding = model.infer(tensor, true);
+  const data = await embedding.data();
+
+  return Array.from(data.slice(0,50));
+}
+
+// ===== 9 ช่อง =====
+async function getCode(){
+  let canvas = document.getElementById("canvas");
+  let ctx = canvas.getContext("2d");
+
+  ctx.drawImage(video,0,0,300,300);
+
+  let size = 100;
+  let code = [];
+
+  for(let y=0;y<3;y++){
+    for(let x=0;x<3;x++){
+      let img = ctx.getImageData(x*size,y*size,size,size);
+      let c = document.createElement("canvas");
+      c.width = 100; c.height = 100;
+      c.getContext("2d").putImageData(img,0,0);
+
+      let feature = await getFeature(c);
+      let sum = feature.reduce((a,b)=>a+b,0);
+
+      code.push(Math.floor(sum % 1000));
+    }
+  }
+
+  return code;
+}
+
+// ===== Similarity =====
+function similarity(a,b){
+  let score=0;
+  for(let i=0;i<9;i++){
+    if(Math.abs(a[i]-b[i])<80) score++;
+  }
+  return (score/9)*100;
+}
+
+// ===== Scan =====
+document.getElementById("scan").onclick = async ()=>{
+  document.getElementById("result").innerText = "กำลังวิเคราะห์...";
+  let code = await getCode();
+
+  let best=0, found=null;
+
+  db.forEach(item=>{
+    let s = similarity(code,item.code);
+    if(s>best){
+      best=s;
+      found=item;
+    }
+  });
+
+  if(found && best>60){
+    document.getElementById("result").innerHTML =
+      "📌 <b>"+found.name+"</b><br>" +
+      found.description + "<br>" +
+      "🌐 "+found.lang + "<br>" +
+      "<button onclick='speakText(\""+found.description+"\",\""+found.lang+"\")'>🔊 ฟังเสียง</button>" +
+      "<br>Score: "+best.toFixed(1)+"%";
+  }else{
+    document.getElementById("result").innerHTML =
+      "❌ ไม่พบ<br>"+best.toFixed(1)+"%";
+  }
+
+  window.lastCode = code;
+};
+
+// ===== Save =====
+document.getElementById("save").onclick = ()=>{
+  if(!window.lastCode){
+    alert("สแกนก่อน");
+    return;
+  }
+
+  let name = prompt("ชื่อภาพ:");
+  if(!name) return;
+
+  let desc = prompt("รายละเอียด:");
+  let lang = prompt("ภาษา (th/en/zh/ja):","th");
+
+  db.push({
+    name:name,
+    description:desc,
+    lang:lang,
+    code:window.lastCode
+  });
+
+  localStorage.setItem("wcodeDB", JSON.stringify(db));
+  alert("บันทึกแล้ว!");
+};
+
+// ===== Text to Speech =====
+function speakText(text, lang){
+  let msg = new SpeechSynthesisUtterance();
+
+  let map = {
+    th:"th-TH",
+    en:"en-US",
+    zh:"zh-CN",
+    ja:"ja-JP"
+  };
+
+  msg.text = text;
+  msg.lang = map[lang] || "en-US";
+
+  speechSynthesis.speak(msg);
+}
+</script>
+
+</body>
+</html>
