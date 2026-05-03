@@ -19,6 +19,7 @@ button { margin:6px; padding:12px; border:none; border-radius:10px;}
 #speak { background:#ffd600; color:#000;}
 #result { margin-top:10px;}
 </style>
+  <link rel="manifest" href="manifest.json">
 </head>
 
 <body>
@@ -26,7 +27,10 @@ button { margin:6px; padding:12px; border:none; border-radius:10px;}
 <h3>Thai W Code (AI All-in-One)</h3>
 
 <video id="video" autoplay playsinline></video><br>
-
+  
+<button id="installBtn" style="display:none;background:#00e676;color:black;padding:10px;border-radius:10px;">
+⬇️ ติดตั้งแอป
+</button>
 <button id="start">▶️ เปิดกล้อง</button><br>
 <button id="scan">📸 สแกน AI</button>
 <button id="save">💾 บันทึก</button>
@@ -172,6 +176,24 @@ function speakText(text, lang){
   msg.lang = map[lang] || "en-US";
 
   speechSynthesis.speak(msg);
+}
+  let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById("installBtn").style.display = "block";
+});
+
+document.getElementById("installBtn").onclick = async ()=>{
+  if(deferredPrompt){
+    deferredPrompt.prompt();
+    deferredPrompt = null;
+  }
+};
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('service-worker.js');
 }
 </script>
 
